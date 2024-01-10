@@ -2,6 +2,9 @@
 .Rhistory
 .Rapp.history
 
+# data folders
+/week*/data/
+
 # Session Data files
 .RData
 .RDataTmp
