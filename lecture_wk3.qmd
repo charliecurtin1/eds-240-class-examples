@@ -1,0 +1,231 @@
+---
+title: "lecture3"
+date: 01-22-2024
+format: html
+editor: visual
+---
+
+#### notes:
+
+-   mapping- how values of variables are represented visually
+
+-   mapping the unemployment rate of 5 different countries
+
+    -   a physical map of the 5 different countries colored by unemployment rate
+
+    -   bar graph ordered lowest to highest
+
+-   McGill's hierarchy
+
+    -   lower orders better for conveying information that's relative, not absolute
+
+    -   best to think about the graphic's purpose
+
+-   sankey diagram
+
+-   choosing the right graphic form
+
+    -   think about the tasks you want to enable and the messages you want to convey
+
+    -   consider data types and the number of variables
+
+    -   try different graphic forms
+
+    -   test the outcomes of the graphic on others
+
+-   from data to viz, the visualization universe, data viz project
+
+-   visualizing data distribution-
+
+### visualizing data from the Mohawk reef
+
+#### setup
+
+```{r}
+# load packages -----
+library(tidyverse)
+library(chron)
+library(naniar)
+
+# import data -----
+mko <- read_csv("https://portal.edirepository.org/nis/dataviewer?packageid=knb-lter-sbc.2007.17&entityid=02629ecc08a536972dec021f662428aa")
+```
+
+#### wrangle data
+
+```{r}
+## wrangle data
+mko_clean <- mko %>% 
+  # select columns of interest
+  select(year, month, day, decimal_time, Temp_bot) %>%
+  # unite our year, month, and day into a new column
+  unite(date, year, month, day, sep = "-", remove = FALSE) %>% 
+  # turn decimal times into time of day
+  mutate(time = times(decimal_time)) %>% 
+  # unite times and date into single datetime column
+  unite(date_time, date, time, sep = " ") %>% 
+  # coerce date_time from a character string into a datetime object
+  mutate(date_time = as.POSIXct(date_time, "%Y-%m-%d %H:%M:%S", tz = "GMT"),
+         year = as.factor(year),
+         month = as.factor(month),
+         day = as.numeric(day)) %>% 
+  # turn month value into month name by indexing the value of month
+  mutate(month_name = as.factor(month.name[month])) %>% 
+  # replace 9999 values with NA
+  replace_with_na(replace = list(Temp_bot = 9999))
+```
+
+#### histograms 
+
+```{r}
+## original plot -----
+# plot temperature bottom by month
+mko_clean %>% 
+  # set levels for month
+  mutate(month_name = factor(month_name, levels = month.name)) %>% 
+  ggplot(aes(x = Temp_bot, fill = month_name)) +
+  # set position to identity so that bars don't stack on top of each other, make transparent
+  geom_histogram(position = "identity",
+                 alpha = .5)
+
+# small multiples -----
+mko_clean %>% 
+  # set levels for month
+  mutate(month_name = factor(month_name, levels = month.name)) %>% 
+  ggplot(aes(x = Temp_bot)) +
+  # set position to identity so that bars don't stack on top of each other, make transparent
+  geom_histogram(position = "identity") +
+  # facet by month
+  facet_wrap(~month_name)
+
+# fewer groups -----
+mko_clean %>% 
+  # set levels for month
+  mutate(month_name = factor(month_name, levels = month.name)) %>% 
+  filter(month_name %in% c("April", "June", "October")) %>% 
+  ggplot(aes(x = Temp_bot, fill = month_name)) +
+  # set position to identity so that bars don't stack on top of each other, make transparent
+  geom_histogram(position = "identity", alpha = .5, bins = 30) +
+  scale_fill_manual(values = c("#2C5473", "#ADD8E6", "#8B3A3A"))
+```
+
+#### density plots
+
+-   smoothed version of a histogram
+
+```{r}
+# original plot ------
+mko_clean %>% 
+  # set levels for month
+  mutate(month_name = factor(month_name, levels = month.name)) %>% 
+  ggplot(aes(x = Temp_bot, fill = month_name)) +
+  # set position to identity so that bars don't stack on top of each other, make transparent
+  geom_density(alpha = .5)
+
+# fewer groups -----
+mko_clean %>% 
+  # set levels for month
+  mutate(month_name = factor(month_name, levels = month.name)) %>% 
+  filter(month_name %in% c("April", "June", "October")) %>% 
+  ggplot(aes(x = Temp_bot, fill = month_name)) +
+  # set position to identity so that bars don't stack on top of each other, make transparent
+  geom_density(alpha = .5, adjust = .8) +
+  scale_fill_manual(values = c("#2C5473", "#ADD8E6", "#8B3A3A"))
+```
+
+-   histograms show us the counts, while density plots show the proportion of values in each range
+
+-   density plot doesn't tell us anything about the sample size, just that we know where observations are in the distribution
+
+-   big difference- density plot is good to compare distribution between groups of different sizes
+
+```{r}
+## comparing histogram and density plot
+dummy_data <- data.frame(value = c(rnorm(n = 100, mean = 5),
+                                   rnorm(n = 200, mean = 10)),
+                         group = rep(c("A", "B"),
+                                     times = c(100, 200)))
+
+# hist -----
+ggplot(dummy_data, aes(x = value, fill = group)) +
+  geom_histogram(position = "identity", alpha = 0.7) +
+  # rug plot where each line represents a single observation
+  geom_rug(aes(color = group), alpha = 0.7)
+
+# density -----
+ggplot(dummy_data, aes(x = value, fill = group)) +
+  geom_density(alpha = 0.7) +
+  # rug plot where each line represents a single observation
+  geom_rug(aes(color = group), alpha = 0.7)
+```
+
+#### ridgeline plot
+
+-   show distribution of a numeric variable for multiple groups
+
+```{r}
+# 
+ggplot(mko_clean, aes(x = Temp_bot, y = month_name, 
+                      fill = after_stat(x))) +
+  ggridges::geom_density_ridges_gradient(rel_min_height = 0.01,
+                                         scale = 3) +
+  # reorder months correctly
+  scale_y_discrete(limits = rev(month.name)) +
+  scale_fill_gradientn(colors = c("#2C5374","#849BB4", "#D9E7EC", "#EF8080", "#8B3A3A"))
+```
+
+#### box plots
+
+-   summarize the distribution of a numeric variable from one or several groups
+
+-   helpful with multiple groups to compare distributions
+
+```{r}
+## box plots
+ggplot(mko_clean, aes(x = month_name, y = Temp_bot, fill = month_name)) +
+  geom_boxplot() +
+  scale_x_discrete(limits = rev(month.name)) +
+  # flip x and y axes
+  coord_flip() +
+  # highlight a particular group
+  gghighlight::gghighlight(month_name == "October") +
+  theme(legend.position = "none")
+
+# jitter and dodge
+library(palmerpenguins)
+
+penguins %>% 
+  mutate(year = as.factor(year)) %>% 
+  ggplot(aes(x = species, y = body_mass_g, color = year)) +
+  geom_boxplot() +
+  # jitters points and assigns them to the correct group (dodge)
+  geom_point(alpha = .5,
+             position = position_jitterdodge(jitter.width = .2)) +
+  coord_flip()
+```
+
+#### violin plots
+
+-   distribution of a numeric variable for one or several groups
+
+```{r}
+ggplot(mko_clean, aes(x = month_name, y = Temp_bot)) +
+  geom_violin() +
+  # overlay a boxplot
+  geom_boxplot(color = "grey", 
+               alpha = .5, 
+               width = .1,
+               outlier.color = "black") +
+  scale_x_discrete(limits = rev(month.name)) +
+  coord_flip()
+
+# half and half violin and dot plot
+ggplot(penguins, aes(x = species, 
+                     y = bill_length_mm, 
+                     fill = species)) +
+  see::geom_violindot(size_dots = 5, 
+                      alpha = .5) +
+  theme(legend.position = "none")
+```
+
+## 
