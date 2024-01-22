@@ -5,6 +5,9 @@
 # data folders
 /week*/data/
 
+# API keys
+/week3/KEYS.R
+
 # Session Data files
 .RData
 .RDataTmp
